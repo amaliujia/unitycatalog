@@ -18,7 +18,6 @@ import org.apache.spark.sql.connector.write.{LogicalWriteInfo, WriteBuilder}
 import org.apache.spark.sql.types.{BinaryType, BooleanType, ByteType, DataType, DoubleType, FloatType, IntegerType, LongType, ShortType, StringType, StructField, StructType, TimestampNTZType, TimestampType}
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
-import java.util.Map
 import scala.collection.convert.ImplicitConversions._
 import scala.collection.JavaConverters._
 import scala.language.existentials
@@ -36,8 +35,6 @@ class UCSingleCatalog
   private[this] var temporaryCredentialsApi: TemporaryCredentialsApi = null
 
   @volatile private var delegate: TableCatalog = null
-
-  @volatile private var ucProxy: TableCatalog = null
 
   override def initialize(name: String, options: CaseInsensitiveStringMap): Unit = {
     val urlStr = options.get("uri")
@@ -58,7 +55,6 @@ class UCSingleCatalog
     temporaryCredentialsApi = new TemporaryCredentialsApi(apiClient)
     val proxy = new UCProxy(apiClient, temporaryCredentialsApi)
     proxy.initialize(name, options)
-    ucProxy = proxy
     if (UCSingleCatalog.LOAD_DELTA_CATALOG.get()) {
       try {
         delegate = Class.forName("org.apache.spark.sql.delta.catalog.DeltaCatalog")
@@ -174,22 +170,22 @@ class UCSingleCatalog
     delegate.asInstanceOf[DelegatingCatalogExtension].dropNamespace(namespace, cascade)
   }
 
-  override def stageCreate(ident: Identifier, columns: Array[Column], partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
+  override def stageCreate(ident: Identifier, columns: Array[Column], partitions: Array[Transform], properties: java.util.Map[String, String]): StagedTable = {
     val oldProperties = loadTableProperties(ident, properties)
     val newTable = super.createTable(ident, columns, partitions, oldProperties ++ properties)
     BestEffortStagedTable(ident, Option(newTable).getOrElse(loadTable(ident)), this)
   }
 
-  override def stageReplace(ident: Identifier, columns: Array[Column], partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
+  override def stageReplace(ident: Identifier, columns: Array[Column], partitions: Array[Transform], properties: java.util.Map[String, String]): StagedTable = {
     val oldProperties = loadTableProperties(ident, properties)
-    super.dropTable(ident)
+    this.dropTable(ident)
     val newTable = super.createTable(ident, columns, partitions, oldProperties ++ properties)
     BestEffortStagedTable(ident, Option(newTable).getOrElse(loadTable(ident)), this)
   }
 
-  override def stageCreateOrReplace(ident: Identifier, columns: Array[Column], partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
+  override def stageCreateOrReplace(ident: Identifier, columns: Array[Column], partitions: Array[Transform], properties: java.util.Map[String, String]): StagedTable = {
     val oldProperties = loadTableProperties(ident, properties)
-    try super.dropTable(ident)
+    try this.dropTable(ident)
     catch {
       case _: NoSuchTableException => // this is fine
     }
@@ -198,7 +194,7 @@ class UCSingleCatalog
   }
 
   def loadTableProperties(ident: Identifier, properties: util.Map[String, String]): util.Map[String, String] = {
-    if (ucProxy != null && ucProxy == this.delegate &&
+    if (UCSingleCatalog.DELTA_CATALOG_LOADED.get() &&
       properties.get("provider").equalsIgnoreCase("delta")) {
       try {
         this.loadTable(ident).properties()
@@ -230,8 +226,20 @@ class UCSingleCatalog
 
     override def newWriteBuilder(info: LogicalWriteInfo): WriteBuilder = table match {
       case supportsWrite: SupportsWrite => supportsWrite.newWriteBuilder(info)
-      case _ => throw new UnsupportedOperationException()(name)
+      case _ => throw new ApiException("Unsupported Table: " + name)
     }
+  }
+
+  override def stageCreate(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
+    throw new AssertionError("deprecated `stageCreate` should not be called")
+  }
+
+  override def stageReplace(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
+    throw new AssertionError("deprecated `stageReplace` should not be called")
+  }
+
+  override def stageCreateOrReplace(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
+    throw new AssertionError("deprecated `stageCreateOrReplace` should not be called")
   }
 }
 
