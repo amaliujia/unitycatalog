@@ -171,8 +171,7 @@ class UCSingleCatalog
   }
 
   override def stageCreate(ident: Identifier, columns: Array[Column], partitions: Array[Transform], properties: java.util.Map[String, String]): StagedTable = {
-    val oldProperties = loadTableProperties(ident, properties)
-    val newTable = createTable(ident, columns, partitions, oldProperties ++ properties)
+    val newTable = createTable(ident, columns, partitions, properties)
     BestEffortStagedTable(ident, Option(newTable).getOrElse(loadTable(ident)), this)
   }
 
@@ -193,7 +192,7 @@ class UCSingleCatalog
     BestEffortStagedTable(ident, Option(newTable).getOrElse(loadTable(ident)), this)
   }
 
-  def loadTableProperties(ident: Identifier, properties: util.Map[String, String]): util.Map[String, String] = {
+  private def loadTableProperties(ident: Identifier, properties: util.Map[String, String]): util.Map[String, String] = {
     if (UCSingleCatalog.DELTA_CATALOG_LOADED.get() &&
       properties.get("provider").equalsIgnoreCase("delta")) {
       try {
