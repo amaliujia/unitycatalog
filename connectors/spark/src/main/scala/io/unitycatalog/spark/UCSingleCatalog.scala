@@ -178,7 +178,7 @@ class UCSingleCatalog
   override def stageReplace(ident: Identifier, columns: Array[Column], partitions: Array[Transform], properties: java.util.Map[String, String]): StagedTable = {
     val oldProperties = loadTableProperties(ident, properties)
     this.dropTable(ident)
-    val newTable = createTable(ident, columns, partitions, removeDeltaProperties(oldProperties) ++ properties)
+    val newTable = createTable(ident, columns, partitions, oldProperties ++ properties)
     BestEffortStagedTable(ident, Option(newTable).getOrElse(loadTable(ident)), this)
   }
 
@@ -188,7 +188,7 @@ class UCSingleCatalog
     catch {
       case _: NoSuchTableException => // this is fine
     }
-    val newTable = createTable(ident, columns, partitions, removeDeltaProperties(oldProperties) ++ properties)
+    val newTable = createTable(ident, columns, partitions, oldProperties ++ properties)
     BestEffortStagedTable(ident, Option(newTable).getOrElse(loadTable(ident)), this)
   }
 
@@ -206,12 +206,6 @@ class UCSingleCatalog
     } else {
       new util.HashMap[String, String]()
     }
-  }
-
-  private def removeDeltaProperties(properties: util.Map[String, String]): util.Map[String, String] = {
-    properties.remove("delta.minReaderVersion")
-    properties.remove("delta.minWriterVersion")
-    properties
   }
     
   private case class BestEffortStagedTable(
