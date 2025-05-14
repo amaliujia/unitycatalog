@@ -56,6 +56,8 @@ lazy val commonSettings = Seq(
     ExclusionRule("org.slf4j", "slf4j-reload4j")
   ),
   resolvers += Resolver.mavenLocal,
+  // TODO: revert this. Testing Spark RC only.
+  resolvers += "Apache Spark 4.0 (RC6) Staging" at "https://repository.apache.org/content/repositories/orgapachespark-1484/",
   autoScalaLibrary := false,
   crossPaths := false,  // No scala cross building
   assembly / assemblyMergeStrategy := {
